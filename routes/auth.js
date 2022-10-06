@@ -4,26 +4,14 @@ require('dotenv').config();
 const passport = require("passport");
 const {Strategy: GoogleStrategy} = require('passport-google-oauth20')
 const {Strategy: NaverStrategy} = require("passport-naver");
-const {Strategy: TwitchStrategy} = require("passport-twitch-new");
+const {Strategy: AppleStrategy} = require("passport-appleid");
 const session = require("express-session");
+const jwt = require("jsonwebtoken");
 
 router.use(session({secret: process.env.TWITCH_CLIENT_SECRET, resave: false, saveUninitialized: false}));
 router.use(passport.initialize(undefined));
 router.use(passport.session(undefined));
 
-passport.use('twitch',
-    new TwitchStrategy({
-        clientID: process.env.TWITCH_CLIENT_ID,
-        clientSecret: process.env.TWITCH_CLIENT_SECRET,
-        callbackURL: '/auth/callback/twitch',
-        scope: "user_read"
-    },
-    function (accessToken, refreshToken, profile, done) {
-        profile.accessToken = accessToken;
-        profile.refreshToken = refreshToken;
-        done(null, profile);
-    }
-));
 
 router.use(session({secret: process.env.NAVER_CLIENT_SECRET, resave: false, saveUninitialized: false}));
 passport.use('naver',
@@ -64,20 +52,26 @@ passport.deserializeUser(function (user, done) {
     done(null, user);
 });
 
-router.get('/auth/login/naver', passport.authenticate('naver', null,null));
-router.get('/auth/callback/naver', passport.authenticate('naver', {
-    successRedirect: '/mypage', failureRedirect: '/login'}, null));
-
-router.get('/auth/login/twitch', passport.authenticate('twitch', {scope: 'user_read'}, null));
-router.get('/auth/callback/twitch', passport.authenticate('twitch', {
-    successRedirect: '/mypage', failureRedirect: '/login'}, null));
+router.get('/auth/login/naver', passport.authenticate('naver', null, null));
+router.get('/auth/callback/naver',
+    passport.authenticate('naver', {failureRedirect: '/login'}, null),
+    async (req, res) => {
+        const token = jwt.sign({id: req.user.id}, process.env.JWT_SECRET);
+        res.cookie('token', token, {httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7});
+        res.redirect('/mypage');
+    });
 
 router.get('/auth/login/google', passport.authenticate('google', {scope: ['profile']}, null));
-router.get('/auth/callback/google', passport.authenticate('google', {
-    successRedirect: '/mypage', failureRedirect: '/login'}, null));
+router.get('/auth/callback/google',
+    passport.authenticate('google', {failureRedirect: '/login'}, null),
+    async (req, res) => {
+        const token = jwt.sign({id: req.user.id}, process.env.JWT_SECRET);
+        res.cookie('token', token, {httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 7});
+        res.redirect('/mypage');
+    });
 
 router.get('/api/auth', (req, res) => {
-    if(req.session && req.user) {
+    if (req.session && req.user) {
         res.json(req.user);
     } else {
         res.json({data: 401});

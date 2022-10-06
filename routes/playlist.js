@@ -1,8 +1,12 @@
 const express = require('express');
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const router = express.Router();
 
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./src/database/playlist.db');
+
+router.use(cookieParser());
 
 function dbAll(query) {
     return new Promise(function (resolve) {
@@ -65,9 +69,13 @@ function normalStatus(data = {}) {
     return result;
 }
 
-function isLoggedIn(req, res, next) {
-    if (req.isAuthenticated()) next();
-    else res.sendStatus(403);
+const isLoggedIn = (req, res, next) => {
+    const token = req.cookies.token;
+    if (!token) return res.sendStatus(403);
+    jwt.verify(token, process.env.JWT_SECRET, (err) => {
+        if (err) return res.sendStatus(403);
+        next();
+    });
 }
 
 const wrongStatus = {'status': 400};
@@ -75,6 +83,7 @@ const errorStatus = {'status': 404};
 
 // 플레이리스트 생성 API
 router.post('/create', isLoggedIn, async function (req, res) {
+    let key;
     let isStatus = null;
     let title = req.body.title;
     let creator = req.body.creator;
@@ -93,7 +102,7 @@ router.post('/create', isLoggedIn, async function (req, res) {
             });
 
             while (true) {
-                let key = createKey(clientId);
+                key = createKey(clientId);
                 // noinspection JSCheckFunctionSignatures
                 if (duplicateCheck.includes(key)) duplicateCheck[0] = true
                 if (duplicateCheck[0] === false) break;
@@ -148,10 +157,9 @@ router.get('/list/:clientId', isLoggedIn, async function (req, res) {
 });
 
 // 플레이리스트 상세 조회 API
-router.get('/detail/:key/:clientId', async function (req, res) {
+router.get('/detail/:key', async function (req, res) {
     let isStatus = null;
     let key = req.params.key;
-    let clientId = req.params.clientId;
 
     await dbGet(`SELECT * FROM playlist WHERE key='${key}'`).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
@@ -171,10 +179,8 @@ router.get('/detail/:key/:clientId', async function (req, res) {
         }
     });
 
-    if (isStatus && isStatus.public === "false" && (!req.isAuthenticated() || clientId !== isStatus.clientId))
-        return res.sendStatus(403);
+    isLoggedIn(req, res, () => {return res.status(200).json(isStatus)});
 
-    return res.status(200).json(isStatus);
 });
 
 // 플레이리스트 수정 API
