@@ -1,5 +1,4 @@
 const express = require('express');
-const path = require('path');
 const bodyParser = require('body-parser');
 
 const apiRouter = require('./routes/api');
@@ -25,10 +24,5 @@ app.use('/api', apiRouter);
 app.use('/api', chartRouter);
 app.use('/', authRouter);
 app.use('/api/playlist', playlistRouter);
-
-app.use(express.static(path.join(__dirname, 'build')));
-app.get('/*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build/index.html'));
-})
 
 app.listen(80, () => console.log('Running'));
