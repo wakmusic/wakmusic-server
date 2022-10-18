@@ -1,10 +1,10 @@
 const express = require('express');
-const axios = require("axios");
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./src/database/static.db');
 
 
+// 뉴스 목록
 router.get('/news', async (req, res) => {
     let start = parseInt(req.query.start);
     if (!start) start = 0;
@@ -14,12 +14,14 @@ router.get('/news', async (req, res) => {
     });
 });
 
+// 아티스트 목록
 router.get('/artist/list', async (req, res) => {
     await db.all('SELECT * FROM artists', (err, rows) => {
         return res.json(rows);
     });
 });
 
+// 팀 정보
 router.get('/teams', async (req, res) => {
     await db.all('SELECT * FROM teams', (err, rows) => {
         return res.json(rows);

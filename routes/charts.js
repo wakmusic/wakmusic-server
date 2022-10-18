@@ -31,7 +31,7 @@ function convertDate(day) {
     return `${day.getFullYear()}${month < 10 ? '0' + month : month}${date < 10 ? '0' + date : date}`.slice(2)
 }
 
-//누적차트
+// 누적차트
 router.get('/charts/total', async (req, res) => {
     let limit = parseInt(req.query.limit);
     if (!limit) limit = 10;
@@ -45,7 +45,7 @@ router.get('/charts/total', async (req, res) => {
     }
 });
 
-//차트(누적 제외)
+// 차트(누적 제외)
 router.get('/charts/:type', async (req, res) => {
     let allowed = ["monthly", "weekly", "daily", "hourly"];
     let type = allowed.includes(req.params.type) ? req.params.type : allowed[0];
@@ -63,7 +63,7 @@ router.get('/charts/:type', async (req, res) => {
     }
 });
 
-//업데이트 시간
+// 업데이트 시간
 router.get('/updated', async (req, res) => {
     try {
         await db.get(`SELECT * FROM updated`).then((resolve) => {
@@ -74,55 +74,35 @@ router.get('/updated', async (req, res) => {
     }
 });
 
-//검색(value 없을 때)
-router.get('/search/keyword/', (req, res) => {
-    res.json([]);
-});
+// 검색
+router.get('/search', async (req, res) => {
+    let allowed = ["title", "artist", "remix", "ids"];
+    let type = allowed.includes(req.query.type) ? req.query.type : allowed[0];
+    let keyword = qs.unescape(req.query.keyword);
 
-//검색
-router.get('/search/keyword/:value', async (req, res) => {
-    let value = qs.unescape(req.params.value);
+    let sort = req.query.sort;
+    if (sort === "new") sort = 'date DESC';
+    else if (sort === "old") sort = 'date ASC';
+    else sort = 'views DESC';
+
     try {
-        await db.all(`SELECT * FROM total WHERE title LIKE "%${value}%" OR artist LIKE "%${value}%" ORDER BY date DESC`).then((resolve) => {
-            return res.json(resolve)
-        });
+        if (type !== "ids") {
+            await db.all(`SELECT * FROM total WHERE ${type} LIKE "%${keyword}%" ORDER BY ${sort}`).then((resolve) => {
+                return res.json(resolve)
+            });
+        } else {
+            let ids = keyword.split(',').join('","');
+            await db.all(`SELECT * FROM total WHERE id IN ("${ids}") ORDER BY ${sort}`).then((resolve) => {
+                return res.json(resolve)
+            });
+        }
     } catch (err) {
+        console.log(err)
         return res.sendStatus(404);
     }
 });
 
-//ID로 검색
-router.get('/search/ids/:value', async (req, res) => {
-    let ids = req.params.value.split(',').join('","');
-    try {
-        await db.all(`SELECT * FROM total WHERE id IN ("${ids}")`).then((resolve) => {
-            return res.json(resolve)
-        });
-    } catch (err) {
-        return res.sendStatus(404);
-    }
-})
-
-//이주의 신곡
-router.get('/new/weekly', async (req, res) => {
-    let now = new Date();
-    let day = now.getDay();
-    let diff = now.getDate() - day + (day === 0 ? -6 : 1)
-
-    let todayStr = convertDate(now);
-    let monday = new Date(now.setDate(diff));
-    let mondayStr = convertDate(monday);
-
-    try {
-        await db.all(`SELECT * FROM total WHERE date >= "${mondayStr}" AND date <= "${todayStr}"`).then((resolve) => {
-            return res.json(resolve)
-        });
-    } catch (err) {
-        return res.sendStatus(404);
-    }
-})
-
-//이달의 신곡
+// 이달의 신곡(웹에서 안씀, 모바일 전용)
 router.get('/new/monthly', async (req, res) => {
     let now = new Date();
     let month = now.getMonth() + 1;
@@ -138,6 +118,7 @@ router.get('/new/monthly', async (req, res) => {
     }
 })
 
+// 월별, 연도별 신곡
 router.get('/list/:type', async (req, res) => {
     let type = req.params.type;
 
@@ -162,6 +143,7 @@ router.get('/list/:type', async (req, res) => {
     }
 })
 
+// 아티스트 노래 목록
 router.get('/artist/albums/:artist', async (req, res) => {
     let artist = req.params.artist;
 
