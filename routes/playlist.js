@@ -4,30 +4,30 @@ const cookieParser = require("cookie-parser");
 const router = express.Router();
 
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./src/database/playlist.db');
+const db = new sqlite3.Database('./src/database/user.db');
 
 router.use(cookieParser());
 
-function dbAll(query) {
+function dbAll(query, params) {
     return new Promise(function (resolve) {
-        db.all(query, [], (err, rows) => {
+        db.all(query, params, (err, rows) => {
             if (err) resolve({'err': err});
             else resolve({'err': err, 'result': rows});
         });
     });
 }
 
-function dbRun(query) {
+function dbRun(query, params) {
     return new Promise(function (resolve) {
-        db.run(query, (err) => {
+        db.run(query, params, (err) => {
             resolve({'err': err});
         });
     });
 }
 
-function dbGet(query) {
+function dbGet(query, params) {
     return new Promise(function (resolve) {
-        db.get(query, (err, row) => {
+        db.get(query, params, (err, row) => {
             if (err) resolve({'err': err});
             else resolve({'err': err, 'result': row});
         });
@@ -71,9 +71,9 @@ function normalStatus(data = {}) {
 
 const isLoggedIn = (req, res, next) => {
     const token = req.cookies.token;
-    if (!token) return res.sendStatus(403);
+    if (!token) return res.sendStatus(401);
     jwt.verify(token, process.env.JWT_SECRET, (err) => {
-        if (err) return res.sendStatus(403);
+        if (err) return res.sendStatus(401);
         next();
     });
 }
@@ -112,7 +112,8 @@ router.post('/create', isLoggedIn, async function (req, res) {
 
     if (isStatus) return res.status(200).json(isStatus);
 
-    await dbRun(`INSERT INTO playlist VALUES ('${key}', '${title}', '${creator}', '${platform}', '${image}', '${songList}', '${isPublic}', '${clientId}', '${clientId}')`).then((resolve) => {
+    let params = [key, title, creator, platform, image, songList, isPublic, clientId, clientId];
+    await dbRun(`INSERT INTO playlist VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, params).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else isStatus = normalStatus({'key': key});
     });
@@ -126,7 +127,7 @@ router.get('/list/:clientId', isLoggedIn, async function (req, res) {
     let clientId = req.params.clientId;
 
     let playlistArray;
-    await dbAll(`SELECT key, title, creator, platform, image FROM playlist WHERE subscribe LIKE '%${clientId}%'`).then((resolve) => {
+    await dbAll(`SELECT key, title, creator, platform, image FROM playlist WHERE subscribe LIKE ?`, ["%" + clientId + "%"]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else if (resolve.result !== []) {
             playlistArray = [];
@@ -161,10 +162,11 @@ router.get('/detail/:key', async function (req, res) {
     let isStatus = null;
     let key = req.params.key;
 
-    await dbGet(`SELECT * FROM playlist WHERE key='${key}'`).then((resolve) => {
+    await dbGet(`SELECT * FROM playlist WHERE key = ?`, [key]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else if (resolve.result) {
             isStatus = normalStatus({
+                'key': resolve.result['key'],
                 'title': resolve.result['title'],
                 'creator': resolve.result['creator'],
                 'platform': resolve.result['platform'],
@@ -179,7 +181,10 @@ router.get('/detail/:key', async function (req, res) {
         }
     });
 
-    isLoggedIn(req, res, () => {return res.status(200).json(isStatus)});
+    if (isStatus.public === "false") isLoggedIn(req, res, () => {
+        return res.status(200).json(isStatus)
+    });
+    else return res.status(200).json(isStatus);
 
 });
 
@@ -193,7 +198,7 @@ router.post('/edit/:key', isLoggedIn, async function (req, res) {
     let isPublic = req.body.public;
     let clientId = req.body.clientId;
 
-    await dbGet(`SELECT * FROM playlist WHERE key='${key}'`).then((resolve) => {
+    await dbGet(`SELECT * FROM playlist WHERE key = ?`, [key]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else if (resolve.result) {
             if (resolve.result['clientId'] !== clientId) isStatus = wrongStatus;
@@ -202,7 +207,8 @@ router.post('/edit/:key', isLoggedIn, async function (req, res) {
 
     if (isStatus) return res.status(200).json(isStatus);
 
-    await dbRun(`UPDATE playlist SET title = '${title}', image = '${image}', songlist = '${songList}', public = '${isPublic}' WHERE key = '${key}'`).then((resolve) => {
+    let params = [title, image, songList, isPublic, clientId, key];
+    await dbRun(`UPDATE playlist SET title = ?, image = ?, songlist = ?, public = ?, clientId = ? WHERE key = ?`, params).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else isStatus = normalStatus();
     });
@@ -216,7 +222,7 @@ router.post('/delete/:key', isLoggedIn, async function (req, res) {
     let key = req.params.key;
     let clientId = req.body.clientId;
 
-    await dbGet(`SELECT * FROM playlist WHERE key='${key}'`).then((resolve) => {
+    await dbGet(`SELECT * FROM playlist WHERE key = ?`, [key]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else if (resolve.result) {
             if (resolve.result['clientId'] !== clientId) isStatus = wrongStatus;
@@ -225,7 +231,7 @@ router.post('/delete/:key', isLoggedIn, async function (req, res) {
 
     if (isStatus) return res.status(200).json(isStatus);
 
-    await dbRun(`DELETE FROM playlist WHERE key = '${key}'`).then((resolve) => {
+    await dbRun(`DELETE FROM playlist WHERE key = ?`, [key]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else isStatus = normalStatus();
     });
@@ -239,7 +245,7 @@ router.post('/add/:key', isLoggedIn, async function (req, res) {
     let key = req.params.key;
     let clientId = req.body.clientId;
 
-    await dbRun(`UPDATE playlist SET subscribe = subscribe || '|:|${clientId}' WHERE key = '${key}'`).then((resolve) => {
+    await dbRun(`UPDATE playlist SET subscribe = subscribe || ? WHERE key = ?`, ["|:|" + clientId, key]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else isStatus = normalStatus();
     });
@@ -254,7 +260,7 @@ router.post('/remove/:key', isLoggedIn, async function (req, res) {
     let clientId = req.body.clientId;
 
     let subscribe;
-    await dbGet(`SELECT * FROM playlist WHERE key = '${key}' AND subscribe LIKE '%|:|${clientId}%'`).then((resolve) => {
+    await dbGet(`SELECT * FROM playlist WHERE key = ? AND subscribe LIKE ?`, [key, "%|:|" + clientId + "%"]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else if (resolve.result) {
             subscribe = resolve.result['subscribe'];
@@ -263,7 +269,7 @@ router.post('/remove/:key', isLoggedIn, async function (req, res) {
 
     if (isStatus) return res.status(200).json(isStatus);
 
-    await dbRun(`UPDATE playlist SET subscribe = '${subscribe.replace(`|:|${clientId}`, '')}' WHERE key = '${key}'`).then((resolve) => {
+    await dbRun(`UPDATE playlist SET subscribe = ? WHERE key = ?`, [subscribe.replace(`|:|${clientId}`, ''), key]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else isStatus = normalStatus();
     });
