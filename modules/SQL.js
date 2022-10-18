@@ -27,10 +27,6 @@ class SQL {
             });
         });
     }
-
-    escape(string) {
-        return db.escape(string);
-    }
 }
 
 module.exports = SQL;
