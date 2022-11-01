@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./src/database/static.db');
+const fs = require('fs');
 
 
 // 뉴스 목록
@@ -27,5 +28,12 @@ router.get('/teams', async (req, res) => {
         return res.json(rows);
     });
 });
+
+router.get('/check-lyrics/:id', (req, res) => {
+    fs.readFile(`./src/lyrics/${req.params.id}.vtt`, 'utf8', (err, data) => {
+        if (err) return res.json({status: 404});
+        return res.json({status: 200});
+    });
+})
 
 module.exports = router;

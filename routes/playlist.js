@@ -35,28 +35,18 @@ function dbGet(query, params) {
 }
 
 function arrToStr(arr) {
-    let str = '';
-    for (let num = 0; num < arr.length; num++) {
-        str += arr[num];
-        if (num !== arr.length - 1) str += '|:|';
-    }
-
-    return str
+    const set = new Set(arr);
+    const newArr = [...set];
+    return newArr.join('|:|');
 }
 
-function createKey(key) {
-    for (let num = 0; num < 3; num++) {
-        let type = Math.floor(Math.random() * 10) % 3;
-        if (type === 0) {
-            key += String.fromCharCode(Math.floor(Math.random() * (57 - 48 + 1)) + 48);
-        } else if (type === 1) {
-            key += String.fromCharCode(Math.floor(Math.random() * (90 - 65 + 1)) + 65);
-        } else if (type === 2) {
-            key += String.fromCharCode(Math.floor(Math.random() * (122 - 97 + 1)) + 97);
-        }
+function createKey(num) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < num; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
-
-    return key;
+    return result;
 }
 
 function normalStatus(data = {}) {
@@ -90,7 +80,7 @@ router.post('/create', isLoggedIn, async function (req, res) {
     let platform = req.body.platform;
     let image = req.body.image;
     let songList = arrToStr(req.body.songlist);
-    let isPublic = req.body.public;
+    let isPublic = String(req.body.public);
     let clientId = req.body.clientId;
 
     await dbAll(`SELECT key FROM playlist where clientId='${clientId}'`).then((resolve) => {
@@ -102,7 +92,7 @@ router.post('/create', isLoggedIn, async function (req, res) {
             });
 
             while (true) {
-                key = createKey(clientId);
+                key = createKey(10);
                 // noinspection JSCheckFunctionSignatures
                 if (duplicateCheck.includes(key)) duplicateCheck[0] = true
                 if (duplicateCheck[0] === false) break;
@@ -127,7 +117,7 @@ router.get('/list/:clientId', isLoggedIn, async function (req, res) {
     let clientId = req.params.clientId;
 
     let playlistArray;
-    await dbAll(`SELECT key, title, creator, platform, image FROM playlist WHERE subscribe LIKE ?`, ["%" + clientId + "%"]).then((resolve) => {
+    await dbAll(`SELECT key, title, creator, image, songlist, clientId FROM playlist WHERE subscribe LIKE ?`, ["%" + clientId + "%"]).then((resolve) => {
         if (resolve.err) isStatus = errorStatus;
         else if (resolve.result !== []) {
             playlistArray = [];
@@ -147,9 +137,9 @@ router.get('/list/:clientId', isLoggedIn, async function (req, res) {
             playlist.push({
                 'key': playlistArray[num]['key'],
                 'title': playlistArray[num]['title'],
-                'creator': playlistArray[num]['creator'],
-                'platform': playlistArray[num]['platform'],
-                'image': playlistArray[num]['image']
+                'image': playlistArray[num]['image'],
+                'count': playlistArray[num]['songlist'].split('|:|').length - 1,
+                'clientId': playlistArray[num]['clientId'],
             });
         }
     }
@@ -171,7 +161,7 @@ router.get('/detail/:key', async function (req, res) {
                 'creator': resolve.result['creator'],
                 'platform': resolve.result['platform'],
                 'image': resolve.result['image'],
-                'public': resolve.result['public'],
+                'public': resolve.result['public'] === 'true',
                 'clientId': resolve.result['clientId'],
                 'songlist': resolve.result['songlist'].split('|:|'),
                 'subscribe': resolve.result['subscribe'].split('|:|')
@@ -195,7 +185,7 @@ router.post('/edit/:key', isLoggedIn, async function (req, res) {
     let title = req.body.title;
     let image = req.body.image;
     let songList = arrToStr(req.body.songlist);
-    let isPublic = req.body.public;
+    let isPublic = String(req.body.public);
     let clientId = req.body.clientId;
 
     await dbGet(`SELECT * FROM playlist WHERE key = ?`, [key]).then((resolve) => {

@@ -9,17 +9,19 @@ async function gather(raw) {
     let data = [];
     for (const d of raw) {
         await db.get(`SELECT * FROM total WHERE id = "${d.id}"`).then((resolve) => {
-            let result = {
-                "id": resolve.id,
-                "title": resolve.title,
-                "artist": resolve.artist,
-                "remix": resolve.remix,
-                "reaction": resolve.reaction,
-                "date": resolve.date,
-                "views": d.increase,
-                "last": d.last
+            if (resolve) {
+                let result = {
+                    "id": resolve.id,
+                    "title": resolve.title,
+                    "artist": resolve.artist,
+                    "remix": resolve.remix,
+                    "reaction": resolve.reaction,
+                    "date": resolve.date,
+                    "views": d.increase,
+                    "last": d.last
+                }
+                data.push(result)
             }
-            data.push(result)
         })
     }
     return data;
@@ -54,10 +56,10 @@ router.get('/charts/:type', async (req, res) => {
 
     try {
         let raw;
-        await db.all(`SELECT * FROM ${type} ORDER BY increase DESC`).then((resolve) => {
+        await db.all(`SELECT * FROM ${type} ORDER BY increase DESC`).then(async (resolve) => {
             raw = resolve.slice(0, limit);
+            return res.json(await gather(raw));
         })
-        return res.json(await gather(raw));
     } catch (err) {
         return res.sendStatus(404);
     }
