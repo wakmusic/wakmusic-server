@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const qs = require('querystring');
 const SQL = require('../modules/SQL')
+const fs = require("fs");
 const db = new SQL();
 
 
@@ -32,6 +33,20 @@ function convertDate(day) {
     let date = day.getDate();
     return `${day.getFullYear()}${month < 10 ? '0' + month : month}${date < 10 ? '0' + date : date}`.slice(2)
 }
+
+router.get('/lyrics-all', (req, res) => {
+    fs.readdir('./src/lyrics', async (err, files) => {
+        await db.all('SELECT id, title, artist, date FROM total ORDER BY views DESC').then((resolve) => {
+            let data = [];
+            for (let i = 0; i < resolve.length; i++) {
+                if (!files.includes(resolve[i].id + '.vtt')) {
+                    data.push(resolve[i])
+                }
+            }
+            return res.json(data);
+        });
+    });
+});
 
 // 누적차트
 router.get('/charts/total', async (req, res) => {
