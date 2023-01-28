@@ -4,6 +4,7 @@ const qs = require('querystring');
 const SQL = require('../modules/SQL')
 const fs = require("fs");
 const db = new SQL();
+const subtitle = require('node-webvtt');
 
 
 async function gather(raw) {
@@ -36,7 +37,7 @@ function convertDate(day) {
 
 router.get('/lyrics-all', (req, res) => {
     fs.readdir('./src/lyrics', async (err, files) => {
-        await db.all('SELECT id, title, artist, date FROM total ORDER BY views DESC').then((resolve) => {
+        await db.all('SELECT id, title, artist, date FROM total ORDER BY date DESC').then((resolve) => {
             let data = [];
             for (let i = 0; i < resolve.length; i++) {
                 if (!files.includes(resolve[i].id + '.vtt')) {
@@ -45,6 +46,14 @@ router.get('/lyrics-all', (req, res) => {
             }
             return res.json(data);
         });
+    });
+});
+
+router.get('/lyrics/:id', (req, res) => {
+    fs.readFile(`./src/lyrics/${req.params.id}.vtt`, 'utf8', (err, data) => {
+        if (err) return res.json({status: 404});
+        const parsed = subtitle.parse(data, {strict: false});
+        return res.json(parsed.cues);
     });
 });
 
@@ -108,13 +117,16 @@ router.get('/search', async (req, res) => {
                 return res.json(resolve)
             });
         } else {
-            let ids = keyword.split(',').join('","');
-            await db.all(`SELECT * FROM total WHERE id IN ("${ids}") ORDER BY ${sort}`).then((resolve) => {
-                return res.json(resolve)
-            });
+            let ids = keyword.split(',');
+            let result = [];
+            for (const id of ids) {
+                await db.get(`SELECT * FROM total WHERE id = ?`, [id]).then((resolve) => {
+                    if (resolve) result.push(resolve);
+                })
+            }
+            return res.json(result);
         }
     } catch (err) {
-        console.log(err)
         return res.sendStatus(404);
     }
 });
